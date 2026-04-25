@@ -502,27 +502,28 @@
 
 <script>
 /* ---------- HOLDINGS (aggregated across all accounts) ---------- */
-/* Derived from account screenshots. Share counts aggregated for each ticker. */
+/* Updated April 25, 2026 from fresh Fidelity snapshots */
 
 const HOLDINGS = [
-  // Joint WROS (the biggest chunk)
-  { ticker: 'VTI',  desc: 'Vanguard Total Market',  shares: 343.893, fallback: 351.095 },  // WROS 281.906 + 61.987 + Roth 1.022 ≈ 344.915, rounded
-  { ticker: 'QQQM', desc: 'Invesco Nasdaq-100',     shares: 240.821, fallback: 269.96 },   // WROS 208.169 + mom Roth 13.069 + Dad Roth 15.814 + Dad Rollover 3.769
-  { ticker: 'QQQ',  desc: 'Invesco QQQ Trust',      shares: 79.314,  fallback: 655.63 },    // WROS 21.416 + Mom Roth 19.283 + Mom TradIRA 1.009 + Dad Rollover 7.886 + Dad Roth 21.555 + Dad Rollover2 7.165
-  { ticker: 'AMZN', desc: 'Amazon',                 shares: 126.838, fallback: 256.99 },
-  { ticker: 'NVDA', desc: 'Nvidia',                 shares: 21.294,  fallback: 201.55 },
-  { ticker: 'META', desc: 'Meta Platforms',         shares: 1.628,   fallback: 666.995 },
-  { ticker: 'INTC', desc: 'Intel',                  shares: 23.219,  fallback: 67.425 },
-  { ticker: 'SMH',  desc: 'VanEck Semiconductor',   shares: 2.221,   fallback: 486.18 },
-  { ticker: 'FBTC', desc: 'Fidelity Bitcoin',       shares: 114.724, fallback: 68.405 },   // 20 + 8 + 6 + 16.024 + 36 + 5 + 23.7
+  { ticker: 'VTI',  desc: 'Vanguard Total Market',  shares: 344.915, fallback: 352.05 },
+  { ticker: 'QQQM', desc: 'Invesco Nasdaq-100',     shares: 240.821, fallback: 273.38 },
+  { ticker: 'QQQ',  desc: 'Invesco QQQ Trust',      shares: 83.327,  fallback: 663.88 },
+  { ticker: 'AMZN', desc: 'Amazon',                 shares: 126.838, fallback: 263.99 },
+  { ticker: 'NVDA', desc: 'Nvidia',                 shares: 21.294,  fallback: 208.27 },
+  { ticker: 'META', desc: 'Meta Platforms',         shares: 1.628,   fallback: 675.03 },
+  { ticker: 'INTC', desc: 'Intel',                  shares: 23.219,  fallback: 82.54 },
+  { ticker: 'SMH',  desc: 'VanEck Semiconductor',   shares: 2.221,   fallback: 506.44 },
+  { ticker: 'FBTC', desc: 'Fidelity Bitcoin',       shares: 114.724, fallback: 67.61 },
   // FZROX is Fidelity ZERO — not on Yahoo Finance directly. Use last known price.
-  { ticker: 'FZROX',desc: 'Fidelity Zero Total Mkt',shares: 9320.234,fallback: 24.83, noFetch: true },
-  // 401(k) collective trusts (not publicly traded) — use S&P 500 as proxy (SPY)
-  { ticker: 'SPY_PROXY_401K', desc: 'S&P 500 401(k) funds', shares: null, fixedValue: 13550.99 + 6330.92, fallback: null, isProxy: true },
-  // 529 plan (NH 2042 target-date fund, not publicly traded — VFIFX used as proxy for live tracking)
+  { ticker: 'FZROX',desc: 'Fidelity Zero Total Mkt',shares: 9321.142,fallback: 24.91, noFetch: true },
+  // 401(k) collective trusts (not publicly traded)
+  { ticker: 'SPY_PROXY_401K', desc: 'S&P 500 401(k) funds', shares: null, fixedValue: 13603.30 + 6494.85, fallback: null, isProxy: true },
+  // 529 plan (NH 2042 target-date fund — VFIFX as proxy for live tracking)
   { ticker: 'VFIFX', desc: '529 Plan (target-date fund)', shares: 102.434, fallback: 48.10, is529: true },
+  // UGMA custodial account
+  { ticker: 'UGMA_CUSTODIAL', desc: 'Custodial account', shares: null, fixedValue: 103.99, fallback: null, isUGMA: true },
   // Cash across accounts
-  { ticker: 'CASH', desc: 'Cash (money market)',    shares: null, fixedValue: 4000.24 + 5017.81 + 3000.00 + 330.97 + 1353.21 + 0.31, isCash: true }
+  { ticker: 'CASH', desc: 'Cash (money market)', shares: null, fixedValue: 13702.54, fallback: null, isCash: true }
 ];
 
 const CONTRIB_MONTHLY = 1800;
@@ -553,7 +554,7 @@ async function fetchPrice(ticker) {
 /* ---------- CALCULATIONS ---------- */
 function computePortfolio(priceMap) {
   const rows = HOLDINGS.map(h => {
-    if (h.isCash || h.isProxy) {
+    if (h.isCash || h.isProxy || h.isUGMA) {
       return { ...h, price: null, value: h.fixedValue, dayChange: 0 };
     }
     let price = priceMap[h.ticker]?.price ?? h.fallback;
@@ -598,14 +599,14 @@ function renderHero(total, dayChange, hasLiveData) {
 }
 
 function renderSplits(rows, total) {
-  // By account type — using array of [label, value] to control order (Object keys starting with digits get reordered)
+  // By account type
   const accountBreakdown = [
-    ['Joint Brokerage', 231559.56],
-    ['Roth IRAs', 67046.89 + 69057.65],
-    ['Traditional / Rollover IRAs', 9103.11 + 59887.33 + 67058.37 + 10290.66],
-    ['HSAs', 5473.09 + 14867.08],
-    ['401(k)s', 13550.99 + 6330.92],
-    ['529 Plan', 4927.27]
+    ['Joint Brokerage', 234253.83],
+    ['Roth IRAs', 69404.31 + 67383.09],
+    ['Traditional / Rollover IRAs', 67290.32 + 10323.82 + 60084.22 + 9131.18],
+    ['HSAs', 14921.46 + 5497.50],
+    ['401(k)s', 13603.30 + 6494.85],
+    ['529 + UGMA', 4927.27 + 103.99]
   ];
 
   const declared = accountBreakdown.reduce((s,[,v])=>s+v, 0);
@@ -623,12 +624,14 @@ function renderSplits(rows, total) {
       </div>`;
   });
 
-  // By owner
+  // By owner — Apr 25, 2026 values
+  // Su (Mom): Rollover + Trad + Roth + HSA + Labcorp 401k = $175,543.21
+  // Teh (Dad): Roth + Trad + HSA + Rollover + Empower 401k = $148,590.84
   const ownerBreakdown = [
-    ['Su', 67046.89 + 9103.11 + 59887.33 + 13550.99],
-    ['Teh', 5473.09 + 67058.37 + 10290.66 + 69057.65 + 14867.08 + 6330.92],
-    ['Joint', 231559.56],
-    ['529 Plan', 4927.27]
+    ['Su', 67290.32 + 10323.82 + 69404.31 + 14921.46 + 13603.30],
+    ['Teh', 67383.09 + 9131.18 + 5497.50 + 60084.22 + 6494.85],
+    ['Joint', 234253.83],
+    ['529 + UGMA', 4927.27 + 103.99]
   ];
   const ownerDeclared = ownerBreakdown.reduce((s,[,v])=>s+v, 0);
   const ownerScale = total / ownerDeclared;
@@ -650,12 +653,13 @@ function renderHoldings(rows, total) {
   const tbody = document.getElementById('holdings-body');
   const mobile = document.getElementById('holdings-cards');
   const displayRows = rows
-    .filter(r => !r.isCash && !r.isProxy && !r.is529)
+    .filter(r => !r.isCash && !r.isProxy && !r.is529 && !r.isUGMA)
     .sort((a, b) => b.value - a.value);
 
   const cashRow = rows.find(r => r.isCash);
   const proxyRow = rows.find(r => r.isProxy);
   const row529 = rows.find(r => r.is529);
+  const rowUGMA = rows.find(r => r.isUGMA);
 
   tbody.innerHTML = '';
   mobile.innerHTML = '';
@@ -698,6 +702,10 @@ function renderHoldings(rows, total) {
 
   if (row529) {
     renderRow('529', row529.desc, null, row529.value, (row529.value / total) * 100);
+  }
+
+  if (rowUGMA) {
+    renderRow('UGMA', rowUGMA.desc, null, rowUGMA.value, (rowUGMA.value / total) * 100);
   }
 
   if (cashRow) {
