@@ -519,6 +519,8 @@ const HOLDINGS = [
   { ticker: 'FZROX',desc: 'Fidelity Zero Total Mkt',shares: 9320.234,fallback: 24.83, noFetch: true },
   // 401(k) collective trusts (not publicly traded) — use S&P 500 as proxy (SPY)
   { ticker: 'SPY_PROXY_401K', desc: 'S&P 500 401(k) funds', shares: null, fixedValue: 13550.99 + 6330.92, fallback: null, isProxy: true },
+  // 529 plan (NH 2042 target-date fund, not publicly traded — VFIFX used as proxy for live tracking)
+  { ticker: 'VFIFX', desc: '529 Plan (target-date fund)', shares: 102.434, fallback: 48.10, is529: true },
   // Cash across accounts
   { ticker: 'CASH', desc: 'Cash (money market)',    shares: null, fixedValue: 4000.24 + 5017.81 + 3000.00 + 330.97 + 1353.21 + 0.31, isCash: true }
 ];
@@ -596,23 +598,22 @@ function renderHero(total, dayChange, hasLiveData) {
 }
 
 function renderSplits(rows, total) {
-  // By account type (approximation based on ticker positions)
-  // Since we aggregated, estimate by known account sizes from screenshots
-  const accountBreakdown = {
-    'Joint Brokerage': 231559.56,
-    'Roth IRAs': 67046.89 + 69057.65,
-    'Traditional / Rollover IRAs': 9103.11 + 59887.33 + 67058.37 + 10290.66,
-    'HSAs': 5473.09 + 14867.08,
-    '401(k)s': 13550.99 + 6330.92
-  };
+  // By account type — using array of [label, value] to control order (Object keys starting with digits get reordered)
+  const accountBreakdown = [
+    ['Joint Brokerage', 231559.56],
+    ['Roth IRAs', 67046.89 + 69057.65],
+    ['Traditional / Rollover IRAs', 9103.11 + 59887.33 + 67058.37 + 10290.66],
+    ['HSAs', 5473.09 + 14867.08],
+    ['401(k)s', 13550.99 + 6330.92],
+    ['529 Plan', 4927.27]
+  ];
 
-  // Scale to match live total (since prices fluctuate)
-  const declared = Object.values(accountBreakdown).reduce((s,v)=>s+v, 0);
+  const declared = accountBreakdown.reduce((s,[,v])=>s+v, 0);
   const scale = total / declared;
 
   const typeDiv = document.getElementById('type-split');
   typeDiv.innerHTML = '';
-  Object.entries(accountBreakdown).forEach(([label, val]) => {
+  accountBreakdown.forEach(([label, val]) => {
     const scaled = val * scale;
     const pct = (scaled / total) * 100;
     typeDiv.innerHTML += `
@@ -623,17 +624,18 @@ function renderSplits(rows, total) {
   });
 
   // By owner
-  const ownerBreakdown = {
-    'Su': 67046.89 + 9103.11 + 59887.33 + 13550.99,
-    'Teh': 5473.09 + 67058.37 + 10290.66 + 69057.65 + 14867.08 + 6330.92,
-    'Joint': 231559.56
-  };
-  const ownerDeclared = Object.values(ownerBreakdown).reduce((s,v)=>s+v, 0);
+  const ownerBreakdown = [
+    ['Su', 67046.89 + 9103.11 + 59887.33 + 13550.99],
+    ['Teh', 5473.09 + 67058.37 + 10290.66 + 69057.65 + 14867.08 + 6330.92],
+    ['Joint', 231559.56],
+    ['529 Plan', 4927.27]
+  ];
+  const ownerDeclared = ownerBreakdown.reduce((s,[,v])=>s+v, 0);
   const ownerScale = total / ownerDeclared;
 
   const ownerDiv = document.getElementById('owner-split');
   ownerDiv.innerHTML = '';
-  Object.entries(ownerBreakdown).forEach(([label, val]) => {
+  ownerBreakdown.forEach(([label, val]) => {
     const scaled = val * ownerScale;
     const pct = (scaled / total) * 100;
     ownerDiv.innerHTML += `
@@ -648,11 +650,12 @@ function renderHoldings(rows, total) {
   const tbody = document.getElementById('holdings-body');
   const mobile = document.getElementById('holdings-cards');
   const displayRows = rows
-    .filter(r => !r.isCash && !r.isProxy)
+    .filter(r => !r.isCash && !r.isProxy && !r.is529)
     .sort((a, b) => b.value - a.value);
 
   const cashRow = rows.find(r => r.isCash);
   const proxyRow = rows.find(r => r.isProxy);
+  const row529 = rows.find(r => r.is529);
 
   tbody.innerHTML = '';
   mobile.innerHTML = '';
@@ -691,6 +694,10 @@ function renderHoldings(rows, total) {
 
   if (proxyRow) {
     renderRow('401(k)', proxyRow.desc, null, proxyRow.value, (proxyRow.value / total) * 100);
+  }
+
+  if (row529) {
+    renderRow('529', row529.desc, null, row529.value, (row529.value / total) * 100);
   }
 
   if (cashRow) {
