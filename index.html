@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Family Portfolio</title>
+<script>
+  // Apply theme before paint to prevent flash
+  (function() {
+    try {
+      var saved = localStorage.getItem('portfolio-theme');
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (saved === 'dark' || (saved !== 'light' && prefersDark)) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    } catch(e) {}
+  })();
+</script>
 <style>
   :root {
     --bg: #fafaf7;
@@ -16,6 +28,32 @@
     --positive: #1F4E3D;
     --negative: #A32D2D;
     --gold: #b8923d;
+    --error-bg: #fef2f2;
+    --error-border: #fecaca;
+    --hero-grad-start: rgba(31, 78, 61, 0.15);
+    --hero-grad-end: rgba(31, 78, 61, 0);
+  }
+
+  [data-theme="dark"] {
+    --bg: #0d0f0e;
+    --surface: #16191a;
+    --ink: #e8e6e0;
+    --ink-muted: #8a8d8a;
+    --line: #232726;
+    --accent: #5eb89b;
+    --accent-soft: #1c2a26;
+    --positive: #5eb89b;
+    --negative: #e07b7b;
+    --gold: #d4a857;
+    --error-bg: #2a1818;
+    --error-border: #4a2828;
+    --hero-grad-start: rgba(94, 184, 155, 0.12);
+    --hero-grad-end: rgba(94, 184, 155, 0);
+  }
+
+  html {
+    background: var(--bg);
+    transition: background-color 0.2s ease;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,6 +65,7 @@
     line-height: 1.5;
     font-size: 15px;
     padding: 48px 24px 80px;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   .container {
@@ -85,6 +124,7 @@
     border-radius: 8px;
     padding: 40px;
     margin-bottom: 32px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
   }
 
   .hero-top {
@@ -172,6 +212,7 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     padding: 28px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
   }
 
   .card h2 {
@@ -400,14 +441,44 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   .error-banner {
-    background: #fef2f2;
-    border: 1px solid #fecaca;
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
     color: var(--negative);
     padding: 12px 16px;
     border-radius: 6px;
     margin-bottom: 24px;
     font-size: 13px;
   }
+
+  /* Theme toggle */
+  #theme-toggle {
+    background: none;
+    border: 1px solid var(--line);
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    color: var(--ink-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #theme-toggle:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #theme-toggle svg {
+    width: 14px;
+    height: 14px;
+  }
+  /* Show sun in dark mode, moon in light mode */
+  #theme-toggle .icon-sun { display: none; }
+  #theme-toggle .icon-moon { display: block; }
+  [data-theme="dark"] #theme-toggle .icon-sun { display: block; }
+  [data-theme="dark"] #theme-toggle .icon-moon { display: none; }
 </style>
 </head>
 <body>
@@ -419,6 +490,15 @@
     <div class="updated">
       <span id="updated-text">Loading live prices…</span>
       <button id="refresh">Refresh</button>
+      <button id="theme-toggle" aria-label="Toggle theme" title="Toggle dark mode">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -761,9 +841,19 @@ function drawChart(dates, values, startValue) {
   const xStep = plotW / (values.length - 1);
   const yScale = plotH / (yMax - yMin);
 
+  // Pull theme colors from CSS vars so chart matches the active theme
+  const styles = getComputedStyle(document.documentElement);
+  const lineColor = styles.getPropertyValue('--line').trim() || '#e8e4dc';
+  const mutedColor = styles.getPropertyValue('--ink-muted').trim() || '#6b6b6b';
+  const accentColor = styles.getPropertyValue('--accent').trim() || '#1F4E3D';
+  const goldColor = styles.getPropertyValue('--gold').trim() || '#b8923d';
+  const surfaceColor = styles.getPropertyValue('--surface').trim() || '#ffffff';
+  const gradStart = styles.getPropertyValue('--hero-grad-start').trim() || 'rgba(31, 78, 61, 0.15)';
+  const gradEnd = styles.getPropertyValue('--hero-grad-end').trim() || 'rgba(31, 78, 61, 0)';
+
   // Gridlines
-  ctx.strokeStyle = '#e8e4dc';
-  ctx.fillStyle = '#6b6b6b';
+  ctx.strokeStyle = lineColor;
+  ctx.fillStyle = mutedColor;
   ctx.font = '11px -apple-system, sans-serif';
   ctx.lineWidth = 1;
 
@@ -792,8 +882,8 @@ function drawChart(dates, values, startValue) {
 
   // Area fill
   const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
-  grad.addColorStop(0, 'rgba(31, 78, 61, 0.15)');
-  grad.addColorStop(1, 'rgba(31, 78, 61, 0)');
+  grad.addColorStop(0, gradStart);
+  grad.addColorStop(1, gradEnd);
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.moveTo(pad.left, H - pad.bottom);
@@ -808,7 +898,7 @@ function drawChart(dates, values, startValue) {
   ctx.fill();
 
   // Line
-  ctx.strokeStyle = '#1F4E3D';
+  ctx.strokeStyle = accentColor;
   ctx.lineWidth = 2;
   ctx.beginPath();
   values.forEach((v, i) => {
@@ -822,18 +912,18 @@ function drawChart(dates, values, startValue) {
   // Endpoint dot
   const lastX = pad.left + xStep * (values.length - 1);
   const lastY = pad.top + (yMax - values[values.length - 1]) * yScale;
-  ctx.fillStyle = '#b8923d';
+  ctx.fillStyle = goldColor;
   ctx.beginPath();
   ctx.arc(lastX, lastY, 5, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = surfaceColor;
   ctx.beginPath();
   ctx.arc(lastX, lastY, 2, 0, Math.PI * 2);
   ctx.fill();
 
   // Starting dot
   const firstY = pad.top + (yMax - values[0]) * yScale;
-  ctx.fillStyle = '#1F4E3D';
+  ctx.fillStyle = accentColor;
   ctx.beginPath();
   ctx.arc(pad.left, firstY, 4, 0, Math.PI * 2);
   ctx.fill();
@@ -889,6 +979,39 @@ window.addEventListener('resize', () => {
     const totalVal = parseFloat(document.getElementById('total-value').textContent.replace(/[$,]/g, ''));
     if (totalVal) renderProjection(totalVal);
   }
+});
+
+/* ---------- THEME TOGGLE ---------- */
+function applyTheme(theme) {
+  if (theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  // Redraw chart with new theme colors
+  const projVal = document.getElementById('proj-value').textContent;
+  if (projVal !== '—') {
+    const totalVal = parseFloat(document.getElementById('total-value').textContent.replace(/[$,]/g, ''));
+    if (totalVal) renderProjection(totalVal);
+  }
+}
+
+// Initialize theme from localStorage or system preference
+(function initTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem('portfolio-theme'); } catch(e) {}
+  if (saved === 'dark' || saved === 'light') {
+    applyTheme(saved);
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    applyTheme('dark');
+  }
+})();
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = isDark ? 'light' : 'dark';
+  applyTheme(next);
+  try { localStorage.setItem('portfolio-theme', next); } catch(e) {}
 });
 </script>
 </body>
