@@ -284,6 +284,15 @@
     letter-spacing: 0.02em;
   }
 
+  td.ticker .proxy-note {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--ink-muted);
+    margin-top: 2px;
+  }
+
   td.desc {
     color: var(--ink-muted);
     font-size: 12px;
@@ -357,6 +366,14 @@
       font-weight: 600;
       font-size: 14px;
       letter-spacing: 0.02em;
+    }
+    .holding-card-ticker .proxy-note {
+      display: block;
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0;
+      color: var(--ink-muted);
+      margin-top: 1px;
     }
     .holding-card-desc {
       font-size: 11px;
@@ -584,28 +601,35 @@
 
 <script>
 /* ---------- HOLDINGS (aggregated across all accounts) ---------- */
-/* Updated April 25, 2026 from fresh Fidelity snapshots */
+/* Updated May 1, 2026 from fresh Fidelity snapshots
+   - FBTC reduced: 114.724 → 39.724 sh (sold 75 sh across multiple accounts)
+   - QQQM increased: 240.821 → 284.624 sh (cash + FBTC proceeds redeployed)
+   - AMZN increased: 126.838 → 130.838 sh (4 sh added in Dad's Rollover IRA)
+   - Cash drawn down: $13,702 → $3,324
+   - FZROX now uses VTI as a price proxy for live intraday tracking
+*/
 
 const HOLDINGS = [
-  { ticker: 'VTI',  desc: 'Vanguard Total Market',  shares: 344.915, fallback: 352.05 },
-  { ticker: 'QQQM', desc: 'Invesco Nasdaq-100',     shares: 240.821, fallback: 273.38 },
-  { ticker: 'QQQ',  desc: 'Invesco QQQ Trust',      shares: 83.327,  fallback: 663.88 },
-  { ticker: 'AMZN', desc: 'Amazon',                 shares: 126.838, fallback: 263.99 },
-  { ticker: 'NVDA', desc: 'Nvidia',                 shares: 21.294,  fallback: 208.27 },
-  { ticker: 'META', desc: 'Meta Platforms',         shares: 1.628,   fallback: 675.03 },
-  { ticker: 'INTC', desc: 'Intel',                  shares: 23.219,  fallback: 82.54 },
-  { ticker: 'SMH',  desc: 'VanEck Semiconductor',   shares: 2.221,   fallback: 506.44 },
-  { ticker: 'FBTC', desc: 'Fidelity Bitcoin',       shares: 114.724, fallback: 67.61 },
-  // FZROX is Fidelity ZERO — not on Yahoo Finance directly. Use last known price.
-  { ticker: 'FZROX',desc: 'Fidelity Zero Total Mkt',shares: 9321.142,fallback: 24.91, noFetch: true },
+  { ticker: 'VTI',  desc: 'Vanguard Total Market',  shares: 344.915, fallback: 356.32 },
+  { ticker: 'QQQM', desc: 'Invesco Nasdaq-100',     shares: 284.624, fallback: 278.06 },
+  { ticker: 'QQQ',  desc: 'Invesco QQQ Trust',      shares: 83.327,  fallback: 675.27 },
+  { ticker: 'AMZN', desc: 'Amazon',                 shares: 130.838, fallback: 269.15 },
+  { ticker: 'NVDA', desc: 'Nvidia',                 shares: 21.294,  fallback: 199.97 },
+  { ticker: 'META', desc: 'Meta Platforms',         shares: 1.628,   fallback: 612.685 },
+  { ticker: 'INTC', desc: 'Intel',                  shares: 23.219,  fallback: 99.04 },
+  { ticker: 'SMH',  desc: 'VanEck Semiconductor',   shares: 2.221,   fallback: 510.73 },
+  { ticker: 'FBTC', desc: 'Fidelity Bitcoin',       shares: 39.724,  fallback: 68.405 },
+  // FZROX is Fidelity ZERO — not on Yahoo Finance directly. Use VTI as live price proxy.
+  // Intraday: FZROX price = fallback × (VTI_current / VTI_prevClose)
+  { ticker: 'FZROX',desc: 'Fidelity Zero Total Mkt',shares: 9426.884,fallback: 25.05, noFetch: true, priceProxy: 'VTI', proxyNote: '(Using VTI as proxy)' },
   // 401(k) collective trusts (not publicly traded)
-  { ticker: 'SPY_PROXY_401K', desc: 'S&P 500 401(k) funds', shares: null, fixedValue: 13603.30 + 6494.85, fallback: null, isProxy: true },
+  { ticker: 'SPY_PROXY_401K', desc: 'S&P 500 401(k) funds', shares: null, fixedValue: 13687.94 + 6494.85, fallback: null, isProxy: true },
   // 529 plan (NH 2042 target-date fund — VFIFX as proxy for live tracking)
   { ticker: 'VFIFX', desc: '529 Plan (target-date fund)', shares: 102.434, fallback: 48.10, is529: true },
   // UGMA custodial account
   { ticker: 'UGMA_CUSTODIAL', desc: 'Custodial account', shares: null, fixedValue: 103.99, fallback: null, isUGMA: true },
-  // Cash across accounts
-  { ticker: 'CASH', desc: 'Cash (money market)', shares: null, fixedValue: 13702.54, fallback: null, isCash: true }
+  // Cash across accounts (net of pending activity)
+  { ticker: 'CASH', desc: 'Cash (money market)', shares: null, fixedValue: 3323.75, fallback: null, isCash: true }
 ];
 
 const CONTRIB_MONTHLY = 1800;
@@ -639,8 +663,22 @@ function computePortfolio(priceMap) {
     if (h.isCash || h.isProxy || h.isUGMA) {
       return { ...h, price: null, value: h.fixedValue, dayChange: 0 };
     }
-    let price = priceMap[h.ticker]?.price ?? h.fallback;
-    let prevClose = priceMap[h.ticker]?.prevClose ?? h.fallback;
+
+    let price = h.fallback;
+    let prevClose = h.fallback;
+
+    if (h.priceProxy && priceMap[h.priceProxy]) {
+      // Apply proxy ticker's intraday % movement to this holding's last known price.
+      // Used for FZROX (no Yahoo intraday data) → tracks VTI's movement instead.
+      const proxy = priceMap[h.priceProxy];
+      const ratio = proxy.price / proxy.prevClose;
+      price = h.fallback * ratio;
+      // prevClose stays at fallback so day change reflects intraday movement only
+    } else if (priceMap[h.ticker]) {
+      price = priceMap[h.ticker].price;
+      prevClose = priceMap[h.ticker].prevClose;
+    }
+
     const value = h.shares * price;
     const prevValue = h.shares * prevClose;
     return { ...h, price, prevClose, value, dayChange: value - prevValue };
@@ -681,13 +719,13 @@ function renderHero(total, dayChange, hasLiveData) {
 }
 
 function renderSplits(rows, total) {
-  // By account type
+  // By account type — May 1, 2026 values
   const accountBreakdown = [
-    ['Joint Brokerage', 234253.83],
-    ['Roth IRAs', 69404.31 + 67383.09],
-    ['Traditional / Rollover IRAs', 67290.32 + 10323.82 + 60084.22 + 9131.18],
-    ['HSAs', 14921.46 + 5497.50],
-    ['401(k)s', 13603.30 + 6494.85],
+    ['Joint Brokerage', 237708.98],
+    ['Roth IRAs', 70004.94 + 68014.74],
+    ['Traditional / Rollover IRAs', 67734.23 + 10381.84 + 60612.54 + 9196.05],
+    ['HSAs', 15171.03 + 5547.56],
+    ['401(k)s', 13687.94 + 6494.85],
     ['529 + UGMA', 4927.27 + 103.99]
   ];
 
@@ -706,13 +744,13 @@ function renderSplits(rows, total) {
       </div>`;
   });
 
-  // By owner — Apr 25, 2026 values
-  // Su (Mom): Rollover + Trad + Roth + HSA + Labcorp 401k = $175,543.21
-  // Teh (Dad): Roth + Trad + HSA + Rollover + Empower 401k = $148,590.84
+  // By owner — May 1, 2026 values
+  // Su (Mom): Rollover + Trad + Roth + HSA + Labcorp 401k = $176,979.98
+  // Teh (Dad): Roth + Trad + HSA + Rollover + Empower 401k = $149,865.74
   const ownerBreakdown = [
-    ['Su', 67290.32 + 10323.82 + 69404.31 + 14921.46 + 13603.30],
-    ['Teh', 67383.09 + 9131.18 + 5497.50 + 60084.22 + 6494.85],
-    ['Joint', 234253.83],
+    ['Su', 67734.23 + 10381.84 + 70004.94 + 15171.03 + 13687.94],
+    ['Teh', 68014.74 + 9196.05 + 5547.56 + 60612.54 + 6494.85],
+    ['Joint', 237708.98],
     ['529 + UGMA', 4927.27 + 103.99]
   ];
   const ownerDeclared = ownerBreakdown.reduce((s,[,v])=>s+v, 0);
@@ -746,12 +784,16 @@ function renderHoldings(rows, total) {
   tbody.innerHTML = '';
   mobile.innerHTML = '';
 
-  const renderRow = (ticker, desc, price, value, pct) => {
+  const renderRow = (ticker, desc, price, value, pct, proxyNote = null) => {
     const barWidth = Math.max(pct * 2, 4);
+    const tickerHTML = proxyNote
+      ? `${ticker}<span class="proxy-note">${proxyNote}</span>`
+      : ticker;
+
     // Desktop table row
     tbody.innerHTML += `
       <tr>
-        <td class="ticker">${ticker}</td>
+        <td class="ticker">${tickerHTML}</td>
         <td class="desc">${desc}</td>
         <td class="right">${price ? '$' + price.toFixed(2) : '—'}</td>
         <td class="right">${formatCurrency(value)}</td>
@@ -764,7 +806,7 @@ function renderHoldings(rows, total) {
     mobile.innerHTML += `
       <div class="holding-card-row">
         <div class="holding-card-left">
-          <div class="holding-card-ticker">${ticker}</div>
+          <div class="holding-card-ticker">${ticker}${proxyNote ? `<span class="proxy-note">${proxyNote}</span>` : ''}</div>
           <div class="holding-card-desc">${desc}</div>
         </div>
         <div class="holding-card-right">
@@ -775,7 +817,7 @@ function renderHoldings(rows, total) {
   };
 
   displayRows.forEach(r => {
-    renderRow(r.ticker, r.desc, r.price, r.value, (r.value / total) * 100);
+    renderRow(r.ticker, r.desc, r.price, r.value, (r.value / total) * 100, r.proxyNote);
   });
 
   if (proxyRow) {
@@ -1005,7 +1047,7 @@ function applyTheme(theme) {
   if (saved === 'dark' || saved === 'light') {
     applyTheme(saved);
   } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-    applyTheme('dark');
+    applyTheme(saved);
   }
 })();
 
